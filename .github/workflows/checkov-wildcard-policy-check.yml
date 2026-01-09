@@ -55,12 +55,14 @@ jobs:
         # Check if the file exists and is actually a file
         if not os.path.exists('checkov-results.json'):
             print("No Checkov results file found")
-            print(f"::set-output name=violations_found::false")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                output_file.write(f"violations_found=false\n")
             sys.exit(0)
             
         if os.path.isdir('checkov-results.json'):
             print("Error: checkov-results.json is a directory, not a file")
-            print(f"::set-output name=violations_found::false")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                output_file.write(f"violations_found=false\n")
             sys.exit(0)
         
         # Load Checkov results
@@ -69,12 +71,14 @@ jobs:
                 content = f.read().strip()
                 if not content:
                     print("Checkov results file is empty")
-                    print(f"::set-output name=violations_found::false")
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                        output_file.write(f"violations_found=false\n")
                     sys.exit(0)
                 results = json.loads(content)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"Error reading Checkov results: {e}")
-            print(f"::set-output name=violations_found::false")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                output_file.write(f"violations_found=false\n")
             sys.exit(0)
         
         # Check for failed checks related to wildcards
@@ -101,10 +105,11 @@ jobs:
                     'guideline': check.get('guideline', '')
                 })
         
-        # Set output for GitHub Actions
+        # Set output for GitHub Actions using environment files
         if wildcard_violations:
-            print(f"::set-output name=violations_found::true")
-            print(f"::set-output name=violation_count::{len(wildcard_violations)}")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                output_file.write(f"violations_found=true\n")
+                output_file.write(f"violation_count={len(wildcard_violations)}\n")
             
             # Create detailed message
             message = "🚨 **Wildcard Policy Violations Detected** 🚨\\n\\n"
@@ -116,15 +121,17 @@ jobs:
                     message += f"  **Guideline**: {violation['guideline']}\\n"
                 message += "\\n"
             
-            # Write to environment file for multi-line output
+            # Write to environment file for multi-line output using proper delimiter
+            delimiter = "VIOLATION_MESSAGE_EOF"
             with open(os.environ['GITHUB_ENV'], 'a') as env_file:
-                env_file.write(f"VIOLATION_MESSAGE<<EOF\\n{message}EOF\\n")
+                env_file.write(f"VIOLATION_MESSAGE<<{delimiter}\n{message}{delimiter}\n")
                 
             print("Wildcard violations found!")
             for v in wildcard_violations:
                 print(f"  - {v['file']}: {v['check_name']}")
         else:
-            print(f"::set-output name=violations_found::false")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as output_file:
+                output_file.write(f"violations_found=false\n")
             print("No wildcard policy violations detected.")
         EOF
         
