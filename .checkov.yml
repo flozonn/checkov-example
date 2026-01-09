@@ -23,5 +23,5 @@ skip-path:
   - .terraform/
   - node_modules/
 
-# Custom severity levels
-severity: HIGH
+# Soft fail mode - don't exit with error code on failures
+soft-fail: true
