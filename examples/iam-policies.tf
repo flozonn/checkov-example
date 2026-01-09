@@ -57,6 +57,24 @@ resource "aws_iam_policy" "bad_wildcard_both" {
   })
 }
 
+# BAD: IAM role with wildcard in trust policy
+resource "aws_iam_role" "bad_wildcard_trust_policy" {
+  name = "bad-wildcard-trust-policy"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "*"  # This wildcard should trigger an alarm
+        }
+      }
+    ]
+  })
+}
+
 # GOOD: Policy with specific actions and resources
 resource "aws_iam_policy" "good_specific_policy" {
   name        = "good-specific-policy"
