@@ -1,0 +1,27 @@
+# Checkov configuration for wildcard policy detection
+framework:
+  - terraform
+  - cloudformation
+
+# Enable specific checks for wildcard policies
+check:
+  - CKV_AWS_60  # IAM policy should not have * resource
+  - CKV_AWS_61  # IAM policy should not have * action  
+  - CKV_AWS_62  # IAM role should not have * in trust policy
+  - CKV_AWS_63  # IAM policy attached to user/group/role should not have * action
+  - CKV_AWS_40  # IAM policy should not have * resource with PassRole action
+  - CKV_AWS_39  # IAM policy should not have * action and * resource
+
+# Output settings
+output: json
+quiet: false
+compact: false
+
+# Skip certain directories
+skip-path:
+  - .git/
+  - .terraform/
+  - node_modules/
+
+# Custom severity levels
+severity: HIGH

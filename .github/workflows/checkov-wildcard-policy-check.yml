@@ -1,0 +1,141 @@
+name: Checkov Wildcard Policy Detection
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  checkov-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install Checkov
+      run: |
+        pip install checkov
+        
+    - name: Run Checkov scan for wildcard policies
+      id: checkov
+      run: |
+        # Run Checkov with built-in checks for wildcard policies
+        checkov -d . \
+          --framework terraform \
+          --check CKV_AWS_60,CKV_AWS_61,CKV_AWS_62,CKV_AWS_63,CKV_AWS_40,CKV_AWS_39 \
+          --output json \
+          --output-file checkov-results.json \
+          --soft-fail
+          
+    - name: Parse Checkov results and check for wildcards
+      id: wildcard-check
+      run: |
+        python3 << 'EOF'
+        import json
+        import sys
+        import os
+        
+        # Load Checkov results
+        try:
+            with open('checkov-results.json', 'r') as f:
+                results = json.load(f)
+        except FileNotFoundError:
+            print("No Checkov results file found")
+            sys.exit(0)
+        
+        # Check for failed checks related to wildcards
+        failed_checks = results.get('results', {}).get('failed_checks', [])
+        wildcard_violations = []
+        
+        # Common wildcard-related check IDs (built into Checkov)
+        wildcard_check_ids = [
+            'CKV_AWS_60',  # IAM policy should not have * resource
+            'CKV_AWS_61',  # IAM policy should not have * action
+            'CKV_AWS_62',  # IAM role should not have * in trust policy
+            'CKV_AWS_63',  # IAM policy attached to user/group/role should not have * action
+            'CKV_AWS_40',  # IAM policy should not have * resource with PassRole action
+            'CKV_AWS_39'   # IAM policy should not have * action and * resource
+        ]
+        
+        for check in failed_checks:
+            if check.get('check_id') in wildcard_check_ids:
+                wildcard_violations.append({
+                    'file': check.get('file_path', 'Unknown'),
+                    'check_id': check.get('check_id'),
+                    'check_name': check.get('check_name'),
+                    'resource': check.get('resource', 'Unknown'),
+                    'guideline': check.get('guideline', '')
+                })
+        
+        # Set output for GitHub Actions
+        if wildcard_violations:
+            print(f"::set-output name=violations_found::true")
+            print(f"::set-output name=violation_count::{len(wildcard_violations)}")
+            
+            # Create detailed message
+            message = "🚨 **Wildcard Policy Violations Detected** 🚨\\n\\n"
+            for violation in wildcard_violations:
+                message += f"- **File**: `{violation['file']}`\\n"
+                message += f"  **Check**: {violation['check_id']} - {violation['check_name']}\\n"
+                message += f"  **Resource**: `{violation['resource']}`\\n"
+                if violation['guideline']:
+                    message += f"  **Guideline**: {violation['guideline']}\\n"
+                message += "\\n"
+            
+            # Write to environment file for multi-line output
+            with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                env_file.write(f"VIOLATION_MESSAGE<<EOF\\n{message}EOF\\n")
+                
+            print("Wildcard violations found!")
+            for v in wildcard_violations:
+                print(f"  - {v['file']}: {v['check_name']}")
+        else:
+            print(f"::set-output name=violations_found::false")
+            print("No wildcard policy violations detected.")
+        EOF
+        
+    - name: Upload Checkov results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: checkov-results
+        path: checkov-results.json
+        
+    - name: Comment on PR with violations
+      if: github.event_name == 'pull_request' && steps.wildcard-check.outputs.violations_found == 'true'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const message = process.env.VIOLATION_MESSAGE;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: message
+          });
+          
+    - name: Fail workflow if violations found
+      if: steps.wildcard-check.outputs.violations_found == 'true'
+      run: |
+        echo "❌ Wildcard policy violations detected!"
+        echo "Number of violations: ${{ steps.wildcard-check.outputs.violation_count }}"
+        echo ""
+        echo "Please review and fix the following issues:"
+        echo "${{ env.VIOLATION_MESSAGE }}"
+        exit 1
+        
+    - name: Success message
+      if: steps.wildcard-check.outputs.violations_found == 'false'
+      run: |
+        echo "✅ No wildcard policy violations detected!"
+        echo "All IAM policies follow security best practices."
