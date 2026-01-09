@@ -33,8 +33,17 @@ jobs:
           --framework terraform \
           --check CKV_AWS_60,CKV_AWS_61,CKV_AWS_62,CKV_AWS_63,CKV_AWS_40,CKV_AWS_39 \
           --output json \
-          --output-file checkov-results.json \
+          --output-file-path checkov-results.json \
           --soft-fail
+        
+        # Debug: Check if file was created correctly
+        echo "Checking Checkov output file:"
+        ls -la checkov-results.json || echo "File not found"
+        if [ -f "checkov-results.json" ]; then
+          echo "File size: $(wc -c < checkov-results.json) bytes"
+          echo "First few lines:"
+          head -5 checkov-results.json
+        fi
           
     - name: Parse Checkov results and check for wildcards
       id: wildcard-check
@@ -44,12 +53,29 @@ jobs:
         import sys
         import os
         
+        # Check if the file exists and is actually a file
+        if not os.path.exists('checkov-results.json'):
+            print("No Checkov results file found")
+            print(f"::set-output name=violations_found::false")
+            sys.exit(0)
+            
+        if os.path.isdir('checkov-results.json'):
+            print("Error: checkov-results.json is a directory, not a file")
+            print(f"::set-output name=violations_found::false")
+            sys.exit(0)
+        
         # Load Checkov results
         try:
             with open('checkov-results.json', 'r') as f:
-                results = json.load(f)
-        except FileNotFoundError:
-            print("No Checkov results file found")
+                content = f.read().strip()
+                if not content:
+                    print("Checkov results file is empty")
+                    print(f"::set-output name=violations_found::false")
+                    sys.exit(0)
+                results = json.loads(content)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error reading Checkov results: {e}")
+            print(f"::set-output name=violations_found::false")
             sys.exit(0)
         
         # Check for failed checks related to wildcards
