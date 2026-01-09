@@ -22,11 +22,11 @@ jobs:
         with:
           directory: .
           framework: terraform
-          check: CKV_AWS_60,CKV_AWS_61,CKV_AWS_62,CKV_AWS_63,CKV_AWS_40,CKV_AWS_39
-          output_format: sarif
+          check: CKV_AWS_49,CKV_AWS_356,CKV_AWS_62,CKV_AWS_1
+          output_format: cli,sarif
           output_file_path: reports/results.sarif
           soft_fail: false
-          quiet: true
+          quiet: false
           
       - name: Upload Checkov results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
