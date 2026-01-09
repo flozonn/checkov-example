@@ -33,8 +33,7 @@ jobs:
           --framework terraform \
           --check CKV_AWS_60,CKV_AWS_61,CKV_AWS_62,CKV_AWS_63,CKV_AWS_40,CKV_AWS_39 \
           --output json \
-          --output-file-path checkov-results.json \
-          --soft-fail
+          --soft-fail > checkov-results.json
         
         # Debug: Check if file was created correctly
         echo "Checking Checkov output file:"
